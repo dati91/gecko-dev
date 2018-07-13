@@ -216,7 +216,7 @@ Please commit or stash these changes before vendoring, or re-run with `--ignore-
                     self.log(logging.ERROR, 'package_many_licenses', {},
                              'package {} provides too many licenses'.format(package))
                     return False
-
+                return True
                 if license_matches:
                     license = license_matches[0].group(1)
                     self.log(logging.DEBUG, 'package_license', {},

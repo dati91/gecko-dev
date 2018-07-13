@@ -5,7 +5,7 @@ use std::ptr;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::os::raw::{c_void, c_char, c_float};
-use gleam::gl;
+//use gleam::gl;
 
 use webrender::api::*;
 use webrender::{ReadPixelsFormat, Renderer, RendererOptions, ThreadListener};
@@ -441,7 +441,7 @@ pub struct WrOpacityProperty {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct WrWindowId(u64);
 
-fn get_proc_address(glcontext_ptr: *mut c_void,
+/*fn get_proc_address(glcontext_ptr: *mut c_void,
                     name: &str)
                     -> *const c_void {
 
@@ -460,7 +460,7 @@ fn get_proc_address(glcontext_ptr: *mut c_void,
     }
 
     symbol as *const _
-}
+}*/
 
 #[repr(C)]
 pub enum TelemetryProbe {
@@ -473,8 +473,8 @@ extern "C" {
     fn is_in_compositor_thread() -> bool;
     fn is_in_render_thread() -> bool;
     fn is_in_main_thread() -> bool;
-    fn is_glcontext_egl(glcontext_ptr: *mut c_void) -> bool;
-    fn is_glcontext_angle(glcontext_ptr: *mut c_void) -> bool;
+    //fn is_glcontext_egl(glcontext_ptr: *mut c_void) -> bool;
+    //fn is_glcontext_angle(glcontext_ptr: *mut c_void) -> bool;
     // Enables binary recording that can be used with `wrench replay`
     // Outputs a wr-record-*.bin file for each window that is shown
     // Note: wrench will panic if external images are used, they can
@@ -889,7 +889,7 @@ pub extern "C" fn wr_renderer_update_program_cache(renderer: &mut Renderer, prog
 pub extern "C" fn wr_window_new(window_id: WrWindowId,
                                 window_width: u32,
                                 window_height: u32,
-                                gl_context: *mut c_void,
+                                _gl_context: *mut c_void,
                                 thread_pool: *mut WrThreadPool,
                                 out_handle: &mut *mut DocumentHandle,
                                 out_renderer: &mut *mut Renderer,
@@ -904,7 +904,7 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
         None
     };
 
-    let gl;
+    /*let gl;
     if unsafe { is_glcontext_egl(gl_context) } {
         gl = unsafe { gl::GlesFns::load_with(|symbol| get_proc_address(gl_context, symbol)) };
     } else {
@@ -914,17 +914,17 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
 
     let version = gl.get_string(gl::VERSION);
 
-    info!("WebRender - OpenGL version new {}", version);
+    info!("WebRender - OpenGL version new {}", version);*/
 
     let workers = unsafe {
         Arc::clone(&(*thread_pool).0)
     };
 
-    let upload_method = if unsafe { is_glcontext_angle(gl_context) } {
+    /*let upload_method = if unsafe { is_glcontext_angle(gl_context) } {
         UploadMethod::Immediate
     } else {
         UploadMethod::PixelBuffer(VertexUsageHint::Dynamic)
-    };
+    };*/
 
     let opts = RendererOptions {
         enable_aa: true,
@@ -946,7 +946,7 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
             }
         },
         renderer_id: Some(window_id.0),
-        upload_method,
+        upload_method: UploadMethod::PixelBuffer(VertexUsageHint::Dynamic),
         scene_builder_hooks: Some(Box::new(APZCallbacks::new(window_id))),
         sampler: Some(Box::new(SamplerCallback::new(window_id))),
         max_texture_size: Some(8192), // Moz2D doesn't like textures bigger than this
@@ -956,7 +956,7 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
     let notifier = Box::new(CppNotifier {
         window_id: window_id,
     });
-    let (renderer, sender) = match Renderer::new(gl, notifier, opts) {
+    let (renderer, sender) = match Renderer::new(/*gl,*/(window_width, window_height), notifier, opts) {
         Ok((renderer, sender)) => (renderer, sender),
         Err(e) => {
             warn!(" Failed to create a Renderer: {:?}", e);

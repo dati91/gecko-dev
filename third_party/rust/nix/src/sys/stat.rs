@@ -1,0 +1,124 @@
+pub use libc::dev_t;
+pub use libc::stat as FileStat;
+
+use {Result, NixPath};
+use errno::Errno;
+use fcntl::AtFlags;
+use libc::{self, mode_t};
+use std::mem;
+use std::os::unix::io::RawFd;
+
+libc_bitflags!(
+    pub struct SFlag: mode_t {
+        S_IFIFO;
+        S_IFCHR;
+        S_IFDIR;
+        S_IFBLK;
+        S_IFREG;
+        S_IFLNK;
+        S_IFSOCK;
+        S_IFMT;
+    }
+);
+
+libc_bitflags! {
+    pub struct Mode: mode_t {
+        S_IRWXU;
+        S_IRUSR;
+        S_IWUSR;
+        S_IXUSR;
+        S_IRWXG;
+        S_IRGRP;
+        S_IWGRP;
+        S_IXGRP;
+        S_IRWXO;
+        S_IROTH;
+        S_IWOTH;
+        S_IXOTH;
+        S_ISUID as mode_t;
+        S_ISGID as mode_t;
+        S_ISVTX as mode_t;
+    }
+}
+
+pub fn mknod<P: ?Sized + NixPath>(path: &P, kind: SFlag, perm: Mode, dev: dev_t) -> Result<()> {
+    let res = try!(path.with_nix_path(|cstr| {
+        unsafe {
+            libc::mknod(cstr.as_ptr(), kind.bits | perm.bits() as mode_t, dev)
+        }
+    }));
+
+    Errno::result(res).map(drop)
+}
+
+#[cfg(target_os = "linux")]
+pub fn major(dev: dev_t) -> u64 {
+    ((dev >> 32) & 0xffff_f000) |
+    ((dev >>  8) & 0x0000_0fff)
+}
+
+#[cfg(target_os = "linux")]
+pub fn minor(dev: dev_t) -> u64 {
+    ((dev >> 12) & 0xffff_ff00) |
+    ((dev      ) & 0x0000_00ff)
+}
+
+#[cfg(target_os = "linux")]
+pub fn makedev(major: u64, minor: u64) -> dev_t {
+    ((major & 0xffff_f000) << 32) |
+    ((major & 0x0000_0fff) <<  8) |
+    ((minor & 0xffff_ff00) << 12) |
+     (minor & 0x0000_00ff)
+}
+
+pub fn umask(mode: Mode) -> Mode {
+    let prev = unsafe { libc::umask(mode.bits() as mode_t) };
+    Mode::from_bits(prev).expect("[BUG] umask returned invalid Mode")
+}
+
+pub fn stat<P: ?Sized + NixPath>(path: &P) -> Result<FileStat> {
+    let mut dst = unsafe { mem::uninitialized() };
+    let res = try!(path.with_nix_path(|cstr| {
+        unsafe {
+            libc::stat(cstr.as_ptr(), &mut dst as *mut FileStat)
+        }
+    }));
+
+    try!(Errno::result(res));
+
+    Ok(dst)
+}
+
+pub fn lstat<P: ?Sized + NixPath>(path: &P) -> Result<FileStat> {
+    let mut dst = unsafe { mem::uninitialized() };
+    let res = try!(path.with_nix_path(|cstr| {
+        unsafe {
+            libc::lstat(cstr.as_ptr(), &mut dst as *mut FileStat)
+        }
+    }));
+
+    try!(Errno::result(res));
+
+    Ok(dst)
+}
+
+pub fn fstat(fd: RawFd) -> Result<FileStat> {
+    let mut dst = unsafe { mem::uninitialized() };
+    let res = unsafe { libc::fstat(fd, &mut dst as *mut FileStat) };
+
+    try!(Errno::result(res));
+
+    Ok(dst)
+}
+
+pub fn fstatat<P: ?Sized + NixPath>(dirfd: RawFd, pathname: &P, f: AtFlags) -> Result<FileStat> {
+    let mut dst = unsafe { mem::uninitialized() };
+    let res = try!(pathname.with_nix_path(|cstr| {
+        unsafe { libc::fstatat(dirfd, cstr.as_ptr(), &mut dst as *mut FileStat, f.bits() as libc::c_int) }
+    }));
+
+    try!(Errno::result(res));
+
+    Ok(dst)
+}
+

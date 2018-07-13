@@ -7,19 +7,22 @@ use api::{
     YuvColorSpace, YuvFormat,
 };
 use batch::{BatchKey, BatchKind, BrushBatchKind};
-use device::{Device, Program, ShaderError};
+use device::{Device, ShaderError, ShaderKind, VertexArrayKind};
 use euclid::{Transform3D};
 use glyph_rasterizer::GlyphFormat;
-use renderer::{
-    desc,
-    MAX_VERTEX_TEXTURE_WIDTH,
-    BlendMode, ImageBufferKind, RendererError, RendererOptions,
-    TextureSampler, VertexArrayKind,
-};
-
-use gleam::gl::GlType;
+use renderer::{BlendMode, ImageBufferKind, RendererError, RendererOptions};
 use time::precise_time_ns;
+use vulkan as back;
 
+cfg_if! {
+    if #[cfg(feature = "gleam")] {
+        use gleam::gl::GlType;
+        use device::Program;
+    } else {
+        use device::ProgramId as Program;
+        type GlType = ();
+    }
+}
 
 impl ImageBufferKind {
     pub(crate) fn get_feature_string(&self) -> &'static str {
@@ -31,6 +34,7 @@ impl ImageBufferKind {
         }
     }
 
+    #[cfg(feature = "gleam")]
     fn has_platform_support(&self, gl_type: &GlType) -> bool {
         match (*self, gl_type) {
             (ImageBufferKind::Texture2D, _) => true,
@@ -38,6 +42,14 @@ impl ImageBufferKind {
             (ImageBufferKind::TextureRect, _) => true,
             (ImageBufferKind::TextureExternal, &GlType::Gles) => true,
             (ImageBufferKind::TextureExternal, &GlType::Gl) => false,
+        }
+    }
+
+    #[cfg(not(feature = "gleam"))]
+    fn has_platform_support(&self) -> bool {
+        match *self {
+            ImageBufferKind::Texture2DArray => true,
+            _ => false,
         }
     }
 }
@@ -53,18 +65,6 @@ const ALPHA_FEATURE: &str = "ALPHA_PASS";
 const DITHERING_FEATURE: &str = "DITHERING";
 const DUAL_SOURCE_FEATURE: &str = "DUAL_SOURCE_BLENDING";
 
-pub(crate) enum ShaderKind {
-    Primitive,
-    Cache(VertexArrayKind),
-    ClipCache,
-    Brush,
-    Text,
-    #[allow(dead_code)]
-    VectorStencil,
-    #[allow(dead_code)]
-    VectorCover,
-}
-
 pub struct LazilyCompiledShader {
     program: Option<Program>,
     name: &'static str,
@@ -77,7 +77,7 @@ impl LazilyCompiledShader {
         kind: ShaderKind,
         name: &'static str,
         features: &[&'static str],
-        device: &mut Device,
+        device: &mut Device<back::Backend>,
         precache: bool,
     ) -> Result<Self, ShaderError> {
         let mut shader = LazilyCompiledShader {
@@ -87,7 +87,7 @@ impl LazilyCompiledShader {
             features: features.to_vec(),
         };
 
-        if precache {
+        if precache && cfg!(feature = "gleam") {
             let t0 = precise_time_ns();
             let program = shader.get(device)?;
             let t1 = precise_time_ns();
@@ -107,7 +107,7 @@ impl LazilyCompiledShader {
 
     pub fn bind(
         &mut self,
-        device: &mut Device,
+        device: &mut Device<back::Backend>,
         projection: &Transform3D<f32>,
         renderer_errors: &mut Vec<RendererError>,
     ) {
@@ -122,44 +122,23 @@ impl LazilyCompiledShader {
         device.set_uniforms(program, projection);
     }
 
-    fn get(&mut self, device: &mut Device) -> Result<&Program, ShaderError> {
+    fn get(&mut self, device: &mut Device<back::Backend>) -> Result<&Program, ShaderError> {
         if self.program.is_none() {
-            let program = match self.kind {
-                ShaderKind::Primitive | ShaderKind::Brush | ShaderKind::Text => {
-                    create_prim_shader(self.name,
-                                       device,
-                                       &self.features,
-                                       VertexArrayKind::Primitive)
-                }
-                ShaderKind::Cache(format) => {
-                    create_prim_shader(self.name,
-                                       device,
-                                       &self.features,
-                                       format)
-                }
-                ShaderKind::VectorStencil => {
-                    create_prim_shader(self.name,
-                                       device,
-                                       &self.features,
-                                       VertexArrayKind::VectorStencil)
-                }
-                ShaderKind::VectorCover => {
-                    create_prim_shader(self.name,
-                                       device,
-                                       &self.features,
-                                       VertexArrayKind::VectorCover)
-                }
-                ShaderKind::ClipCache => {
-                    create_clip_shader(self.name, device)
-                }
-            };
+            let program = device.create_program_with_kind(
+                self.name,
+                &self.kind,
+                match self.kind {
+                    ShaderKind::ClipCache  => &["TRANSFORM"],
+                    _ => &self.features,
+                },
+            );
             self.program = Some(program?);
         }
 
         Ok(self.program.as_ref().unwrap())
     }
 
-    fn deinit(self, device: &mut Device) {
+    fn deinit(self, device: &mut Device<back::Backend>) {
         if let Some(program) = self.program {
             device.delete_program(program);
         }
@@ -186,7 +165,7 @@ struct BrushShader {
 impl BrushShader {
     fn new(
         name: &'static str,
-        device: &mut Device,
+        device: &mut Device<back::Backend>,
         features: &[&'static str],
         precache: bool,
         dual_source: bool,
@@ -250,7 +229,7 @@ impl BrushShader {
         }
     }
 
-    fn deinit(self, device: &mut Device) {
+    fn deinit(self, device: &mut Device<back::Backend>) {
         self.opaque.deinit(device);
         self.alpha.deinit(device);
         if let Some(dual_source) = self.dual_source {
@@ -267,7 +246,7 @@ pub struct TextShader {
 impl TextShader {
     fn new(
         name: &'static str,
-        device: &mut Device,
+        device: &mut Device<back::Backend>,
         features: &[&'static str],
         precache: bool,
     ) -> Result<Self, ShaderError> {
@@ -307,92 +286,11 @@ impl TextShader {
         }
     }
 
-    fn deinit(self, device: &mut Device) {
+    fn deinit(self, device: &mut Device<back::Backend>) {
         self.simple.deinit(device);
         self.glyph_transform.deinit(device);
     }
 }
-
-fn create_prim_shader(
-    name: &'static str,
-    device: &mut Device,
-    features: &[&'static str],
-    vertex_format: VertexArrayKind,
-) -> Result<Program, ShaderError> {
-    let mut prefix = format!(
-        "#define WR_MAX_VERTEX_TEXTURE_WIDTH {}\n",
-        MAX_VERTEX_TEXTURE_WIDTH
-    );
-
-    for feature in features {
-        prefix.push_str(&format!("#define WR_FEATURE_{}\n", feature));
-    }
-
-    debug!("PrimShader {}", name);
-
-    let vertex_descriptor = match vertex_format {
-        VertexArrayKind::Primitive => desc::PRIM_INSTANCES,
-        VertexArrayKind::Blur => desc::BLUR,
-        VertexArrayKind::Clip => desc::CLIP,
-        VertexArrayKind::VectorStencil => desc::VECTOR_STENCIL,
-        VertexArrayKind::VectorCover => desc::VECTOR_COVER,
-        VertexArrayKind::Border => desc::BORDER,
-    };
-
-    let program = device.create_program(name, &prefix, &vertex_descriptor);
-
-    if let Ok(ref program) = program {
-        device.bind_shader_samplers(
-            program,
-            &[
-                ("sColor0", TextureSampler::Color0),
-                ("sColor1", TextureSampler::Color1),
-                ("sColor2", TextureSampler::Color2),
-                ("sDither", TextureSampler::Dither),
-                ("sCacheA8", TextureSampler::CacheA8),
-                ("sCacheRGBA8", TextureSampler::CacheRGBA8),
-                ("sTransformPalette", TextureSampler::TransformPalette),
-                ("sRenderTasks", TextureSampler::RenderTasks),
-                ("sResourceCache", TextureSampler::ResourceCache),
-                ("sSharedCacheA8", TextureSampler::SharedCacheA8),
-                ("sPrimitiveHeadersF", TextureSampler::PrimitiveHeadersF),
-                ("sPrimitiveHeadersI", TextureSampler::PrimitiveHeadersI),
-            ],
-        );
-    }
-
-    program
-}
-
-fn create_clip_shader(name: &'static str, device: &mut Device) -> Result<Program, ShaderError> {
-    let prefix = format!(
-        "#define WR_MAX_VERTEX_TEXTURE_WIDTH {}\n
-        #define WR_FEATURE_TRANSFORM\n",
-        MAX_VERTEX_TEXTURE_WIDTH
-    );
-
-    debug!("ClipShader {}", name);
-
-    let program = device.create_program(name, &prefix, &desc::CLIP);
-
-    if let Ok(ref program) = program {
-        device.bind_shader_samplers(
-            program,
-            &[
-                ("sColor0", TextureSampler::Color0),
-                ("sTransformPalette", TextureSampler::TransformPalette),
-                ("sRenderTasks", TextureSampler::RenderTasks),
-                ("sResourceCache", TextureSampler::ResourceCache),
-                ("sSharedCacheA8", TextureSampler::SharedCacheA8),
-                ("sPrimitiveHeadersF", TextureSampler::PrimitiveHeadersF),
-                ("sPrimitiveHeadersI", TextureSampler::PrimitiveHeadersI),
-            ],
-        );
-    }
-
-    program
-}
-
 
 pub struct Shaders {
     // These are "cache shaders". These shaders are used to
@@ -433,8 +331,10 @@ pub struct Shaders {
 }
 
 impl Shaders {
+
+    #[cfg(feature = "gleam")]
     pub fn new(
-        device: &mut Device,
+        device: &mut Device<back::Backend>,
         gl_type: GlType,
         options: &RendererOptions,
     ) -> Result<Self, ShaderError> {
@@ -447,6 +347,28 @@ impl Shaders {
             None
         };
 
+        let shaders = Self::make_shaders(device, options, gl_type);
+
+        if let Some(vao) = dummy_vao {
+            device.delete_custom_vao(vao);
+        }
+
+        shaders
+    }
+
+    #[cfg(not(feature = "gleam"))]
+    pub fn new(
+        device: &mut Device<back::Backend>,
+        options: &RendererOptions,
+    ) -> Result<Self, ShaderError> {
+        Self::make_shaders(device, options, ())
+    }
+
+    fn make_shaders(
+        device: &mut Device<back::Backend>,
+        options: &RendererOptions,
+        gl_type: GlType,
+    ) -> Result<Self, ShaderError> {
         let brush_solid = BrushShader::new(
             "brush_solid",
             device,
@@ -475,9 +397,9 @@ impl Shaders {
             "brush_radial_gradient",
             device,
             if options.enable_dithering {
-               &[DITHERING_FEATURE]
+                &[DITHERING_FEATURE]
             } else {
-               &[]
+                &[]
             },
             options.precache_shaders,
             false,
@@ -487,9 +409,9 @@ impl Shaders {
             "brush_linear_gradient",
             device,
             if options.enable_dithering {
-               &[DITHERING_FEATURE]
+                &[DITHERING_FEATURE]
             } else {
-               &[]
+                &[]
             },
             options.precache_shaders,
             false,
@@ -543,13 +465,15 @@ impl Shaders {
             options.precache_shaders,
         )?;
 
-        let ps_text_run = TextShader::new("ps_text_run",
+        let ps_text_run = TextShader::new(
+            "ps_text_run",
             device,
             &[],
             options.precache_shaders,
         )?;
 
-        let ps_text_run_dual_source = TextShader::new("ps_text_run",
+        let ps_text_run_dual_source = TextShader::new(
+            "ps_text_run",
             device,
             &["DUAL_SOURCE_BLENDING"],
             options.precache_shaders,
@@ -563,7 +487,10 @@ impl Shaders {
             brush_image.push(None);
         }
         for buffer_kind in 0 .. IMAGE_BUFFER_KINDS.len() {
-            if IMAGE_BUFFER_KINDS[buffer_kind].has_platform_support(&gl_type) {
+            if IMAGE_BUFFER_KINDS[buffer_kind].has_platform_support(
+                #[cfg(feature = "gleam")]
+                &gl_type,
+            ) {
                 let feature_string = IMAGE_BUFFER_KINDS[buffer_kind].get_feature_string();
                 if feature_string != "" {
                     image_features.push(feature_string);
@@ -588,7 +515,10 @@ impl Shaders {
             brush_yuv_image.push(None);
         }
         for image_buffer_kind in &IMAGE_BUFFER_KINDS {
-            if image_buffer_kind.has_platform_support(&gl_type) {
+            if image_buffer_kind.has_platform_support(
+                #[cfg(feature = "gleam")]
+                &gl_type,
+            ) {
                 for format_kind in &YUV_FORMATS {
                     for color_space_kind in &YUV_COLOR_SPACES {
                         let feature_string = image_buffer_kind.get_feature_string();
@@ -626,9 +556,9 @@ impl Shaders {
         let cs_border_segment = LazilyCompiledShader::new(
             ShaderKind::Cache(VertexArrayKind::Border),
             "cs_border_segment",
-             &[],
-             device,
-             options.precache_shaders,
+            &[],
+            device,
+            options.precache_shaders,
         )?;
 
         let ps_split_composite = LazilyCompiledShader::new(
@@ -638,10 +568,6 @@ impl Shaders {
             device,
             options.precache_shaders,
         )?;
-
-        if let Some(vao) = dummy_vao {
-            device.delete_custom_vao(vao);
-        }
 
         Ok(Shaders {
             cs_blur_a8,
@@ -720,7 +646,7 @@ impl Shaders {
         }
     }
 
-    pub fn deinit(self, device: &mut Device) {
+    pub fn deinit(self, device: &mut Device<back::Backend>) {
         self.cs_blur_a8.deinit(device);
         self.cs_blur_rgba8.deinit(device);
         self.brush_solid.deinit(device);
