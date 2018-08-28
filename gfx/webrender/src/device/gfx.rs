@@ -1599,41 +1599,41 @@ impl<B: hal::Backend> DescriptorPools<B> {
                 count: 5,
             }
         ];
-
+        let pool_size = 400;
         let cache_clip_range = vec![
             hal::pso::DescriptorRangeDesc {
                 ty: hal::pso::DescriptorType::SampledImage,
-                count: 400,
+                count: pool_size * 10,
             },
             DescriptorRangeDesc {
                 ty: hal::pso::DescriptorType::Sampler,
-                count: 400,
+                count: pool_size * 10,
             },
             DescriptorRangeDesc {
                 ty: hal::pso::DescriptorType::UniformBuffer,
-                count: 40,
+                count: pool_size,
             }
         ];
 
         let default_range = vec![
             hal::pso::DescriptorRangeDesc {
                 ty: hal::pso::DescriptorType::SampledImage,
-                count: 400,
+                count: pool_size * 10,
             },
             DescriptorRangeDesc {
                 ty: hal::pso::DescriptorType::Sampler,
-                count: 400,
+                count: pool_size * 10,
             },
             DescriptorRangeDesc {
                 ty: hal::pso::DescriptorType::UniformBuffer,
-                count: 40,
+                count: pool_size,
             }
         ];
 
         DescriptorPools {
             debug_pool: DescPool::new(device, 5, debug_range, debug_layout),
-            cache_clip_pool: DescPool::new(device, 40, cache_clip_range, cache_clip_layout),
-            default_pool: DescPool::new(device, 40, default_range, default_layout),
+            cache_clip_pool: DescPool::new(device, pool_size, cache_clip_range, cache_clip_layout),
+            default_pool: DescPool::new(device, pool_size, default_range, default_layout),
         }
     }
 
