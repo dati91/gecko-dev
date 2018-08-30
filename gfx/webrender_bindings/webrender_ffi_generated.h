@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.6.2 */
+/* Generated with cbindgen:0.6.3 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -1755,8 +1755,7 @@ bool wr_window_new(WrWindowId aWindowId,
                    uint32_t aWindowWidth,
                    uint32_t aWindowHeight,
                    void *aGlContext,
-                   void *aDisplay,
-                   unsigned long aWindow,
+                   void *aNsview,
                    WrThreadPool *aThreadPool,
                    DocumentHandle **aOutHandle,
                    Renderer **aOutRenderer,

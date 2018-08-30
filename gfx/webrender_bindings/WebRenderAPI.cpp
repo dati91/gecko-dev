@@ -68,11 +68,11 @@ public:
     *mUseDComp = compositor->UseDComp();
 
     wr::Renderer* wrRenderer = nullptr;
-    widget::GtkCompositorWidget* compWidget = compositor->GetWidget()->AsX11();
+    auto* compWidget = compositor->GetWidget();
     MOZ_ASSERT(compWidget);
 
     if (!wr_window_new(aWindowId, mSize.width, mSize.height, compositor->gl(),
-                       compWidget->XDisplay(), compWidget->XWindow(),
+                       compWidget->Window(),
                        aRenderThread.ThreadPool().Raw(),
                        mDocHandle, &wrRenderer,
                        mMaxTextureSize)) {

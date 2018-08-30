@@ -1201,8 +1201,7 @@ impl Renderer
     pub fn new(
         //init: DeviceInit<Back::Backend>,
         //window: &winit::Window,
-        display: *mut raw::c_void,
-        window: raw::c_ulong,
+        nsview: *mut raw::c_void,
         width: u32,
         height: u32,
         notifier: Box<RenderNotifier>,
@@ -1228,7 +1227,7 @@ impl Renderer
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
             //let mut surface = instance.create_surface(window);
-            let mut surface = instance.create_surface_from_xlib(display as _, window as _);
+            let mut surface = instance.create_surface_from_nsview(nsview as _);
             //(window, adapter, surface, instance)
             (adapter, surface, instance)
         };
