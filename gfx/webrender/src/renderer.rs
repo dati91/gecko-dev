@@ -75,7 +75,7 @@ use tiling::GlyphJob;
 use time::precise_time_ns;
 
 use hal::Instance;
-use gfx_backend_vulkan as Back;
+use gfx_backend_metal as Back;
 //use winit;
 
 use std::os::raw;

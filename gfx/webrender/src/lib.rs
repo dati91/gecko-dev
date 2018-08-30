@@ -54,7 +54,7 @@ extern crate serde;
 #[macro_use]
 extern crate thread_profiler;
 pub extern crate gfx_hal as hal;
-pub extern crate gfx_backend_vulkan;
+pub extern crate gfx_backend_metal;
 pub extern crate winit;
 #[cfg(not(feature = "gleam"))]
 extern crate rand;
