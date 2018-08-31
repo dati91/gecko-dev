@@ -10,7 +10,8 @@
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/layers/SyncObject.h"
 //#include "mozilla/webrender/RenderCompositorOGL.h"
-#include "mozilla/widget/GtkCompositorWidget.h"
+//#include "mozilla/widget/GtkCompositorWidget.h"
+#include "mozilla/widget/WinCompositorWidget.h"
 #include "mozilla/webrender/RenderCompositorSZEGED.h"
 #include "mozilla/widget/CompositorWidget.h"
 
