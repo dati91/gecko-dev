@@ -68,11 +68,11 @@ public:
     *mUseDComp = compositor->UseDComp();
 
     wr::Renderer* wrRenderer = nullptr;
-    auto* compWidget = compositor->GetWidget();
+    auto* compWidget = compositor->GetWindow();
     MOZ_ASSERT(compWidget);
 
     if (!wr_window_new(aWindowId, mSize.width, mSize.height, compositor->gl(),
-                       compWidget->Window(),
+                       compWidget,//->GetCocoaWindow(),
                        aRenderThread.ThreadPool().Raw(),
                        mDocHandle, &wrRenderer,
                        mMaxTextureSize)) {
