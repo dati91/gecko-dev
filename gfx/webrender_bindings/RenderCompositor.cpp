@@ -15,9 +15,9 @@
 #include "mozilla/webrender/RenderCompositorSZEGED.h"
 #include "mozilla/widget/CompositorWidget.h"
 
-#ifdef XP_WIN
+/*#ifdef XP_WIN
 #include "mozilla/webrender/RenderCompositorANGLE.h"
-#endif
+#endif*/
 
 namespace mozilla {
 namespace wr {
@@ -25,11 +25,11 @@ namespace wr {
 /* static */ UniquePtr<RenderCompositor>
 RenderCompositor::Create(RefPtr<widget::CompositorWidget>&& aWidget)
 {
-#ifdef XP_WIN
+/*#ifdef XP_WIN
   if (gfx::gfxVars::UseWebRenderANGLE()) {
     return RenderCompositorANGLE::Create(std::move(aWidget));
   }
-#endif
+#endif*/
   return RenderCompositorSZEGED::Create(std::move(aWidget));
 }
 

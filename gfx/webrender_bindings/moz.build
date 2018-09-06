@@ -7,17 +7,6 @@
 with Files('**'):
     BUG_COMPONENT = ('Core', 'Graphics: WebRender')
 
-#if CONFIG['MOZ_WIDGET_TOOLKIT'] == 'gtk3':
-    #USE_LIBS += [
-    #    'mozgtk_stub',
-    #]
-    #OS_LIBS += [
-    #    'gtk-3',
-    #    'gdk-3',
-    #]
-
-CXXFLAGS += CONFIG['MOZ_GTK3_CFLAGS']
-
 EXPORTS.mozilla.webrender += [
     'RenderBufferTextureHost.h',
     'RenderCompositor.h',

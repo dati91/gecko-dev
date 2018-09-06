@@ -3,7 +3,7 @@ use std::{mem, slice, ptr, env};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::os::raw::{c_void, c_char, c_float, c_ulong};
+use std::os::raw::{c_void, c_char, c_float};
 use gleam::gl;
 
 use webrender::api::*;

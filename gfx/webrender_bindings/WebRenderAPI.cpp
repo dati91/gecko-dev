@@ -72,7 +72,7 @@ public:
     MOZ_ASSERT(compWidget);
 
     if (!wr_window_new(aWindowId, mSize.width, mSize.height, compositor->gl(),
-                       compWidget->GetInstance(), compWidget->GetHwnd(),
+                       GetModuleHandleW(nullptr), compWidget->GetHwnd(),
                        aRenderThread.ThreadPool().Raw(),
                        mDocHandle, &wrRenderer,
                        mMaxTextureSize)) {
