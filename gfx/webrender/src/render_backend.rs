@@ -753,7 +753,31 @@ impl RenderBackend {
                                 window_size: doc.view.window_size,
                             };
                             tx.send(captured).unwrap();
+
+                            // notify the active recorder
+                            if let Some(ref mut r) = self.recorder {
+                                let pipeline_id = doc.scene.root_pipeline_id.unwrap();
+                                let epoch =  doc.scene.pipeline_epochs[&pipeline_id];
+                                let pipeline = &doc.scene.pipelines[&pipeline_id];
+                                let scene_msg = SceneMsg::SetDisplayList {
+                                    list_descriptor: pipeline.display_list.descriptor().clone(),
+                                    epoch,
+                                    pipeline_id,
+                                    background: pipeline.background_color,
+                                    viewport_size: pipeline.viewport_size,
+                                    content_size: pipeline.content_size,
+                                    preserve_frame_state: false,
+                                };
+                                let txn = TransactionMsg::scene_message(scene_msg);
+                                r.write_msg(*frame_counter, &ApiMsg::UpdateDocument(*id, txn));
+                                r.write_payload(*frame_counter, &Payload::construct_data(
+                                    epoch,
+                                    pipeline_id,
+                                    pipeline.display_list.data(),
+                                ));
+                            }
                         }
+
                         // Note: we can't pass `LoadCapture` here since it needs to arrive
                         // before the `PublishDocument` messages sent by `load_capture`.
                         return true;
@@ -1066,10 +1090,7 @@ impl RenderBackend {
             let debug_node = debug_server::TreeNode::new("document clip-scroll tree");
             let mut builder = debug_server::TreeNodeBuilder::new(debug_node);
 
-            // TODO(gw): Restructure the storage of clip-scroll tree, clip store
-            //           etc so this isn't so untidy.
-            let clip_store = &doc.frame_builder.as_ref().unwrap().clip_store;
-            doc.clip_scroll_tree.print_with(clip_store, &mut builder);
+            doc.clip_scroll_tree.print_with(&mut builder);
 
             debug_root.add(builder.build());
         }
