@@ -75,7 +75,7 @@ use tiling::GlyphJob;
 use time::precise_time_ns;
 use vulkan as back;
 use hal::Instance;
-use winit;
+use std::os::raw;
 
 cfg_if! {
     if #[cfg(feature = "debugger")] {
@@ -1180,7 +1180,10 @@ impl Renderer
     /// ```
     /// [rendereroptions]: struct.RendererOptions.html
     pub fn new(
-        window: &winit::Window,
+        display: *mut raw::c_void,
+        window: raw::c_ulong,
+        width: u32,
+        height: u32,
         notifier: Box<RenderNotifier>,
         mut options: RendererOptions,
     ) -> Result<(Self, RenderApiSender), RendererError> {
@@ -1195,16 +1198,15 @@ impl Renderer
             notifier: notifier.clone(),
         };
 
-        let (window, adapter, surface, instance) = {
+        let (adapter, surface, instance) = {
             let instance = back::Instance::create("gfx-rs instance", 1);
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
-            let mut surface = instance.create_surface(window);
-            (window, adapter, surface, instance)
+            let mut surface = instance.create_surface_from_xlib(display as _, window as _);
+            ( adapter, surface, instance)
         };
 
         let mut device = {
-            let winit::dpi::LogicalSize { width, height } = window.get_inner_size().unwrap();
             let init = DeviceInit {
                 adapter: adapter,
                 surface: surface,
