@@ -2691,7 +2691,7 @@ gfxPlatform::InitWebRenderConfig()
         "ANGLE is disabled",
         NS_LITERAL_CSTRING("FEATURE_FAILURE_ANGLE_DISABLED"));
     } else {
-      gfxVars::SetUseWebRenderANGLE(gfxConfig::IsEnabled(Feature::WEBRENDER));
+      gfxVars::SetUseWebRenderANGLE(false);
     }
   }
 #endif

@@ -1180,8 +1180,8 @@ impl Renderer
     /// ```
     /// [rendereroptions]: struct.RendererOptions.html
     pub fn new(
-        display: *mut raw::c_void,
-        window: raw::c_ulong,
+        hinstance: *mut raw::c_void,
+        hwnd: *mut raw::c_void,
         width: u32,
         height: u32,
         notifier: Box<RenderNotifier>,
@@ -1202,7 +1202,7 @@ impl Renderer
             let instance = back::Instance::create("gfx-rs instance", 1);
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
-            let mut surface = instance.create_surface_from_xlib(display as _, window as _);
+            let mut surface = instance.create_surface_from_hwnd(hinstance as _, hwnd as _);
             ( adapter, surface, instance)
         };
 

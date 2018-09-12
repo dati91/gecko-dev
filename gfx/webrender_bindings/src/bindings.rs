@@ -3,7 +3,7 @@ use std::{mem, slice, ptr, env};
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::os::raw::{c_void, c_char, c_float, c_ulong};
+use std::os::raw::{c_void, c_char, c_float};
 use gleam::gl;
 
 use webrender::api::*;
@@ -895,8 +895,8 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
                                 window_width: u32,
                                 window_height: u32,
                                 gl_context: *mut c_void,
-                                display: *mut c_void,
-                                window: c_ulong,
+                                hinstance: *mut c_void,
+                                hwnd: *mut c_void,
                                 thread_pool: *mut WrThreadPool,
                                 out_handle: &mut *mut DocumentHandle,
                                 out_renderer: &mut *mut Renderer,
@@ -965,8 +965,8 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
         window_id: window_id,
     });
     let (renderer, sender) = match Renderer::new(
-        display,
-        window,
+        hinstance,
+        hwnd,
         window_width,
         window_height,
         notifier,
