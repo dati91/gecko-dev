@@ -73,16 +73,11 @@ public:
 
     bool supportLowPriorityTransactions = true; // TODO only for main windows.
     wr::Renderer* wrRenderer = nullptr;
-    nsIWidget* compWidget = compositor->GetWidget()->RealWidget();
-    //widget::CompositorWidget* compWidget = compositor->GetWidget();
+    widget::WinCompositorWidget* compWidget = compositor->GetWidget()->AsWindows();
     MOZ_ASSERT(compWidget);
-    //nsView* nsview = nsView::GetViewFor(compWidget);
-    //MOZ_ASSERT(nsview);
     if (!wr_window_new(aWindowId, mSize.width, mSize.height, supportLowPriorityTransactions,
                        compositor->gl(),
-                       //compWidget->GetNativeData(NS_NATIVE_WINDOW),
-                       compWidget->GetNativeData(NS_NATIVE_WIDGET),
-                       //nsview,
+                       GetModuleHandleW(nullptr), compWidget->GetHwnd(),
                        aRenderThread.ThreadPool().Raw(),
                        &WebRenderMallocSizeOf,
                        mDocHandle, &wrRenderer,
