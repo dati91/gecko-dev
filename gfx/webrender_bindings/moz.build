@@ -7,11 +7,6 @@
 with Files('**'):
     BUG_COMPONENT = ('Core', 'Graphics: WebRender')
 
-#CXXFLAGS += CONFIG['MOZ_GTK3_CFLAGS']
-OS_LIBS += [
-    '-framework Metal',
-]
-
 EXPORTS.mozilla.webrender += [
     'RenderBufferTextureHost.h',
     'RenderCompositor.h',

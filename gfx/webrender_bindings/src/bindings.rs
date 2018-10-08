@@ -930,6 +930,10 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
                                 out_renderer: &mut *mut Renderer,
                                 out_max_texture_size: *mut u32)
                                 -> bool {
+    let msg = CString::new("in wr_window_new").unwrap();
+    unsafe {
+        gfx_critical_note(msg.as_ptr());
+    }
     assert!(unsafe { is_in_render_thread() });
 
     let recorder: Option<Box<ApiRecordingReceiver>> = if unsafe { gfx_use_wrench() } {
@@ -1021,6 +1025,10 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
             DocumentHandle::new(sender.create_api(), window_size, layer)));
     *out_renderer = Box::into_raw(Box::new(renderer));
 
+    let msg = CString::new("end of wr_window_new").unwrap();
+    unsafe {
+        gfx_critical_note(msg.as_ptr());
+    }
     return true;
 }
 

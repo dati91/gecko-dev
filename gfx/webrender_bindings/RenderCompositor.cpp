@@ -10,7 +10,6 @@
 #include "mozilla/gfx/gfxVars.h"
 #include "mozilla/layers/SyncObject.h"
 #include "mozilla/webrender/RenderCompositorSZEGED.h"
-#include "mozilla/widget/WinCompositorWidget.h"
 #include "mozilla/widget/CompositorWidget.h"
 
 #ifdef XP_WIN
@@ -25,9 +24,11 @@ RenderCompositor::Create(RefPtr<widget::CompositorWidget>&& aWidget)
 {
 #ifdef XP_WIN
   if (gfx::gfxVars::UseWebRenderANGLE()) {
+    gfxCriticalNote << "UseWebRenderANGLE true";
     return RenderCompositorANGLE::Create(std::move(aWidget));
   }
 #endif
+  gfxCriticalNote << "UseWebRenderANGLE false";
   return RenderCompositorSZEGED::Create(std::move(aWidget));
 }
 

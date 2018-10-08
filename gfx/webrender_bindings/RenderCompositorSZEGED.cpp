@@ -48,6 +48,7 @@ RenderCompositorSZEGED::Initialize()
     gfxCriticalNote << "Failed GL context creation for WebRender: " << gfx::hexa(mGL.get());
     return false;
   }
+  gfxCriticalNote << "GL context creation for WebRender";
 
   if (!mGL->MakeCurrent()) {
     gfxCriticalNote << "Failed GL context creation for WebRender: " << gfx::hexa(mGL.get());

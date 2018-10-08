@@ -13,12 +13,13 @@
 #include "mozilla/layers/CompositorThread.h"
 #include "mozilla/webrender/RenderCompositor.h"
 #include "mozilla/widget/CompositorWidget.h"
+#include "mozilla/widget/WinCompositorWidget.h"
 #include "mozilla/layers/SynchronousTask.h"
 
 #include "nsView.h"
 
-//#define WRDL_LOG(...)
-#define WRDL_LOG(...) printf_stderr("WRDL(%p): " __VA_ARGS__)
+#define WRDL_LOG(...)
+//#define WRDL_LOG(...) printf_stderr("WRDL(%p): " __VA_ARGS__)
 //#define WRDL_LOG(...) if (XRE_IsContentProcess()) printf_stderr("WRDL(%p): " __VA_ARGS__)
 
 namespace mozilla {
@@ -60,11 +61,15 @@ public:
 
   virtual void Run(RenderThread& aRenderThread, WindowId aWindowId) override
   {
+    WRDL_LOG("in Run");
+    gfxCriticalNote << "in Run";
     layers::AutoCompleteTask complete(mTask);
 
     UniquePtr<RenderCompositor> compositor = RenderCompositor::Create(std::move(mCompositorWidget));
     if (!compositor) {
       // RenderCompositor::Create puts a message into gfxCriticalNote if it is nullptr
+      WRDL_LOG("  no compositor");
+      gfxCriticalNote << "  no compositor";
       return;
     }
 
@@ -74,10 +79,14 @@ public:
     bool supportLowPriorityTransactions = true; // TODO only for main windows.
     wr::Renderer* wrRenderer = nullptr;
     widget::WinCompositorWidget* compWidget = compositor->GetWidget()->AsWindows();
+    if (compWidget == nullptr) {
+      return;
+    }
+    WRDL_LOG("  get widget as win");
     MOZ_ASSERT(compWidget);
     if (!wr_window_new(aWindowId, mSize.width, mSize.height, supportLowPriorityTransactions,
                        compositor->gl(),
-                       GetModuleHandleW(nullptr), compWidget->GetHwnd(),
+                       GetModuleHandle(nullptr), compWidget->GetHwnd(),
                        aRenderThread.ThreadPool().Raw(),
                        &WebRenderMallocSizeOf,
                        mDocHandle, &wrRenderer,
