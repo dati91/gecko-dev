@@ -50,7 +50,7 @@ pub const INVALID_TEXTURE_ID: TextureId = 0;
 pub const INVALID_PROGRAM_ID: ProgramId = ProgramId(0);
 pub const DEFAULT_READ_FBO: FBOId = FBOId(0);
 pub const DEFAULT_DRAW_FBO: FBOId = FBOId(1);
-pub const MAX_FRAME_COUNT: usize = 1;
+pub const MAX_FRAME_COUNT: usize = 2;
 
 const COLOR_RANGE: hal::image::SubresourceRange = hal::image::SubresourceRange {
     aspects: hal::format::Aspects::COLOR,
@@ -3087,7 +3087,7 @@ impl<B: hal::Backend> Device<B> {
         if texture.still_in_flight(self.frame_id) && !self.upload_queue.is_empty() {
             println!("free_image");
             self.wait_for_resources();
-            /*let fence = self.device.create_fence(false);
+            let fence = self.device.create_fence(false);
             self.device.reset_fence(&fence);
             {
                 println!("self.upload_queue.len={:?}", self.upload_queue.len());
@@ -3096,7 +3096,7 @@ impl<B: hal::Backend> Device<B> {
                 self.queue_group.queues[0].submit(submission, Some(&fence));
             }
             self.device.wait_for_fence(&fence, !0);
-            self.device.destroy_fence(fence);*/
+            self.device.destroy_fence(fence);
             self.reset_command_pools();
         }
         if let Some(depth_rb) = texture.depth_rb.take() {
@@ -3742,6 +3742,7 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub fn submit_to_gpu(&mut self) -> bool {
+        println!("submit_to_gpu");
         {
             let mut cmd_buffer = self.command_pool[self.next_id].acquire_command_buffer(false);
             let image = &self.frame_images[self.current_frame_id];
@@ -3777,7 +3778,7 @@ impl<B: hal::Backend> Device<B> {
         self.next_id = (self.next_id + 1) % MAX_FRAME_COUNT;
         self.reset_state();
         if self.frame_fence[self.next_id].is_submitted {
-            self.device.wait_for_fence(&self.frame_fence[self.next_id].inner, 1000);
+            self.device.wait_for_fence(&self.frame_fence[self.next_id].inner, !0);
             self.device.reset_fence(&self.frame_fence[self.next_id].inner);
             self.frame_fence[self.next_id].is_submitted = false;
         }
@@ -3796,7 +3797,7 @@ impl<B: hal::Backend> Device<B> {
     fn wait_for_resources(&mut self) {
         for fence in &mut self.frame_fence {
             if fence.is_submitted {
-                self.device.wait_for_fence(&fence.inner, 1000);
+                self.device.wait_for_fence(&fence.inner, !0);
                 self.device.reset_fence(&fence.inner);
                 fence.is_submitted = false;
             }
