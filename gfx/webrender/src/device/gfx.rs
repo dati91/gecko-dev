@@ -1639,7 +1639,7 @@ impl<B: hal::Backend> DescriptorPools<B> {
             }
         ];
 
-        let count = 400;
+        let count = 800;
         let cache_clip_range = vec![
             hal::pso::DescriptorRangeDesc {
                 ty: hal::pso::DescriptorType::SampledImage,
@@ -2240,7 +2240,7 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub fn update_program_cache(&mut self, _cached_programs: Rc<ProgramCache>) {
-        unimplemented!();
+        //unimplemented!();
     }
 
     pub fn max_texture_size(&self) -> u32 {
