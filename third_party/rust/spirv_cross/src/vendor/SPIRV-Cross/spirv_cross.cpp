@@ -487,22 +487,17 @@ bool Compiler::is_hidden_variable(const SPIRVariable &var, bool include_builtins
 	return hidden;
 }
 
-bool Compiler::is_builtin_type(const SPIRType &type) const
-{
-	// We can have builtin structs as well. If one member of a struct is builtin, the struct must also be builtin.
-	for (auto &m : meta[type.self].members)
-		if (m.builtin)
-			return true;
-
-	return false;
-}
-
 bool Compiler::is_builtin_variable(const SPIRVariable &var) const
 {
 	if (var.compat_builtin || meta[var.self].decoration.builtin)
 		return true;
-	else
-		return is_builtin_type(get<SPIRType>(var.basetype));
+
+	// We can have builtin structs as well. If one member of a struct is builtin, the struct must also be builtin.
+	for (auto &m : meta[get<SPIRType>(var.basetype).self].members)
+		if (m.builtin)
+			return true;
+
+	return false;
 }
 
 bool Compiler::is_member_builtin(const SPIRType &type, uint32_t index, BuiltIn *builtin) const
@@ -1131,10 +1126,6 @@ void Compiler::set_member_decoration(uint32_t id, uint32_t index, Decoration dec
 		dec.location = argument;
 		break;
 
-	case DecorationComponent:
-		dec.component = argument;
-		break;
-
 	case DecorationBinding:
 		dec.binding = argument;
 		break;
@@ -1221,8 +1212,6 @@ uint32_t Compiler::get_member_decoration(uint32_t id, uint32_t index, Decoration
 		return dec.builtin_type;
 	case DecorationLocation:
 		return dec.location;
-	case DecorationComponent:
-		return dec.component;
 	case DecorationBinding:
 		return dec.binding;
 	case DecorationOffset:
@@ -1277,10 +1266,6 @@ void Compiler::unset_member_decoration(uint32_t id, uint32_t index, Decoration d
 		dec.location = 0;
 		break;
 
-	case DecorationComponent:
-		dec.component = 0;
-		break;
-
 	case DecorationOffset:
 		dec.offset = 0;
 		break;
@@ -1328,10 +1313,6 @@ void Compiler::set_decoration(uint32_t id, Decoration decoration, uint32_t argum
 
 	case DecorationLocation:
 		dec.location = argument;
-		break;
-
-	case DecorationComponent:
-		dec.component = argument;
 		break;
 
 	case DecorationOffset:
@@ -1446,8 +1427,6 @@ uint32_t Compiler::get_decoration(uint32_t id, Decoration decoration) const
 		return dec.builtin_type;
 	case DecorationLocation:
 		return dec.location;
-	case DecorationComponent:
-		return dec.component;
 	case DecorationOffset:
 		return dec.offset;
 	case DecorationBinding:
@@ -1481,10 +1460,6 @@ void Compiler::unset_decoration(uint32_t id, Decoration decoration)
 
 	case DecorationLocation:
 		dec.location = 0;
-		break;
-
-	case DecorationComponent:
-		dec.component = 0;
 		break;
 
 	case DecorationOffset:
@@ -2599,19 +2574,6 @@ size_t Compiler::get_declared_struct_size(const SPIRType &type) const
 	size_t offset = type_struct_member_offset(type, last);
 	size_t size = get_declared_struct_member_size(type, last);
 	return offset + size;
-}
-
-size_t Compiler::get_declared_struct_size_runtime_array(const SPIRType &type, size_t array_size) const
-{
-	if (type.member_types.empty())
-		SPIRV_CROSS_THROW("Declared struct in block cannot be empty.");
-
-	size_t size = get_declared_struct_size(type);
-	auto &last_type = get<SPIRType>(type.member_types.back());
-	if (!last_type.array.empty() && last_type.array_size_literal[0] && last_type.array[0] == 0) // Runtime array
-		size += array_size * type_struct_member_array_stride(type, uint32_t(type.member_types.size() - 1));
-
-	return size;
 }
 
 size_t Compiler::get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const

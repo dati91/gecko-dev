@@ -222,15 +222,7 @@ public:
 		SPVFuncImplFindILsb,
 		SPVFuncImplFindSMsb,
 		SPVFuncImplFindUMsb,
-		SPVFuncImplArrayCopyMultidimBase,
-		// Unfortunately, we cannot use recursive templates in the MSL compiler properly,
-		// so stamp out variants up to some arbitrary maximum.
-		SPVFuncImplArrayCopy = SPVFuncImplArrayCopyMultidimBase + 1,
-		SPVFuncImplArrayOfArrayCopy2Dim = SPVFuncImplArrayCopyMultidimBase + 2,
-		SPVFuncImplArrayOfArrayCopy3Dim = SPVFuncImplArrayCopyMultidimBase + 3,
-		SPVFuncImplArrayOfArrayCopy4Dim = SPVFuncImplArrayCopyMultidimBase + 4,
-		SPVFuncImplArrayOfArrayCopy5Dim = SPVFuncImplArrayCopyMultidimBase + 5,
-		SPVFuncImplArrayOfArrayCopy6Dim = SPVFuncImplArrayCopyMultidimBase + 6,
+		SPVFuncImplArrayCopy,
 		SPVFuncImplTexelBufferCoords,
 		SPVFuncImplInverse4x4,
 		SPVFuncImplInverse3x3,
@@ -241,7 +233,6 @@ public:
 		SPVFuncImplRowMajor3x4,
 		SPVFuncImplRowMajor4x2,
 		SPVFuncImplRowMajor4x3,
-		SPVFuncImplArrayCopyMultidimMax = 6
 	};
 
 	// Constructs an instance to compile the SPIR-V code into Metal Shading Language,
@@ -285,7 +276,6 @@ public:
 	void remap_constexpr_sampler(uint32_t id, const MSLConstexprSampler &sampler);
 
 protected:
-	void emit_binary_unord_op(uint32_t result_type, uint32_t result_id, uint32_t op0, uint32_t op1, const char *op);
 	void emit_instruction(const Instruction &instr) override;
 	void emit_glsl_op(uint32_t result_type, uint32_t result_id, uint32_t op, const uint32_t *args,
 	                  uint32_t count) override;
@@ -299,6 +289,7 @@ protected:
 	std::string image_type_glsl(const SPIRType &type, uint32_t id = 0) override;
 	std::string sampler_type(const SPIRType &type);
 	std::string builtin_to_glsl(spv::BuiltIn builtin, spv::StorageClass storage) override;
+	std::string constant_expression(const SPIRConstant &c) override;
 	size_t get_declared_struct_member_size(const SPIRType &struct_type, uint32_t index) const override;
 	std::string to_func_call_arg(uint32_t id) override;
 	std::string to_name(uint32_t id, bool allow_alias = true) const override;
@@ -340,6 +331,7 @@ protected:
 	void emit_resources();
 	void emit_specialization_constants();
 	void emit_interface_block(uint32_t ib_var_id);
+	bool maybe_emit_input_struct_assignment(uint32_t id_lhs, uint32_t id_rhs);
 	bool maybe_emit_array_assignment(uint32_t id_lhs, uint32_t id_rhs);
 	void add_convert_row_major_matrix_function(uint32_t cols, uint32_t rows);
 
@@ -355,7 +347,7 @@ protected:
 	std::string argument_decl(const SPIRFunction::Parameter &arg);
 	std::string round_fp_tex_coords(std::string tex_coords, bool coord_is_fp);
 	uint32_t get_metal_resource_index(SPIRVariable &var, SPIRType::BaseType basetype);
-	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index, uint32_t *comp = nullptr);
+	uint32_t get_ordered_member_location(uint32_t type_id, uint32_t index);
 	size_t get_declared_struct_member_alignment(const SPIRType &struct_type, uint32_t index) const;
 	std::string to_component_argument(uint32_t id);
 	void align_struct(SPIRType &ib_type);
@@ -364,7 +356,7 @@ protected:
 	std::string get_argument_address_space(const SPIRVariable &argument);
 	void emit_atomic_func_op(uint32_t result_type, uint32_t result_id, const char *op, uint32_t mem_order_1,
 	                         uint32_t mem_order_2, bool has_mem_order_2, uint32_t op0, uint32_t op1 = 0,
-	                         bool op1_is_pointer = false, bool op1_is_literal = false, uint32_t op2 = 0);
+	                         bool op1_is_pointer = false, uint32_t op2 = 0);
 	const char *get_memory_order(uint32_t spv_mem_sem);
 	void add_pragma_line(const std::string &line);
 	void add_typedef_line(const std::string &line);
@@ -373,7 +365,6 @@ protected:
 	void build_implicit_builtins();
 	void emit_entry_point_declarations() override;
 	uint32_t builtin_frag_coord_id = 0;
-	uint32_t builtin_sample_id_id = 0;
 
 	void bitcast_to_builtin_store(uint32_t target_id, std::string &expr, const SPIRType &expr_type) override;
 	void bitcast_from_builtin_load(uint32_t source_id, std::string &expr, const SPIRType &expr_type) override;
@@ -389,12 +380,14 @@ protected:
 	MSLResourceBinding next_metal_resource_index;
 	uint32_t stage_in_var_id = 0;
 	uint32_t stage_out_var_id = 0;
+	uint32_t stage_uniforms_var_id = 0;
 	bool needs_vertex_idx_arg = false;
 	bool needs_instance_idx_arg = false;
 	bool is_rasterization_disabled = false;
 	std::string qual_pos_var_name;
 	std::string stage_in_var_name = "in";
 	std::string stage_out_var_name = "out";
+	std::string stage_uniform_var_name = "uniforms";
 	std::string sampler_name_suffix = "Smplr";
 	spv::Op previous_instruction_opcode = spv::OpNop;
 

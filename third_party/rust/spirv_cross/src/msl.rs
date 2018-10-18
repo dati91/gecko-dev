@@ -99,18 +99,16 @@ impl Default for CompilerVertexOptions {
 /// MSL compiler options.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct CompilerOptions {
-    /// The target platform.
+    ///
     pub platform: Platform,
-    /// The target MSL version.
+    ///
     pub version: Version,
-    /// Vertex compiler options.
+    ///
     pub vertex: CompilerVertexOptions,
-    /// Whether the built-in point size should be enabled.
+    ///
     pub enable_point_size_builtin: bool,
-    /// Whether array lengths should be resolved instead of specialized.
+    ///
     pub resolve_specialized_array_lengths: bool,
-    /// Whether rasterization should be enabled.
-    pub enable_rasterization: bool,
     /// MSL resource bindings overrides.
     pub resource_binding_overrides: BTreeMap<ResourceBindingLocation, ResourceBinding>,
     /// MSL vertex attribute overrides.
@@ -126,7 +124,6 @@ impl CompilerOptions {
             version: self.version.as_raw(),
             enable_point_size_builtin: self.enable_point_size_builtin,
             resolve_specialized_array_lengths: self.resolve_specialized_array_lengths,
-            disable_rasterization: !self.enable_rasterization,
         }
     }
 }
@@ -139,7 +136,6 @@ impl Default for CompilerOptions {
             vertex: CompilerVertexOptions::default(),
             enable_point_size_builtin: true,
             resolve_specialized_array_lengths: true,
-            enable_rasterization: true,
             resource_binding_overrides: Default::default(),
             vertex_attribute_overrides: Default::default(),
         }
@@ -245,14 +241,6 @@ impl spirv::Ast<Target> {
             };
             check!(sc_internal_free_pointer(shader_ptr as *mut c_void));
             Ok(shader)
-        }
-    }
-
-    pub fn is_rasterization_enabled(&self) -> Result<bool, ErrorCode> {
-        unsafe {
-            let mut is_disabled = false;
-            check!(sc_internal_compiler_msl_get_is_rasterization_disabled(self.compiler.sc_compiler, &mut is_disabled));
-            Ok(!is_disabled)
         }
     }
 }

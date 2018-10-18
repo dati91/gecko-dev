@@ -12,7 +12,7 @@
 
 [package]
 name = "spirv_cross"
-version = "0.11.2"
+version = "0.10.1"
 authors = ["Joshua Groves <josh@joshgroves.com>"]
 build = "build.rs"
 description = "Safe wrapper around SPIRV-Cross"
