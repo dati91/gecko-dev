@@ -1278,7 +1278,7 @@ impl Renderer
             let instance = back::Instance::create("gfx-rs instance", 1);
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
-            let mut surface = instance.create_surface_from_hwnd(hinstance as _, hwnd as _);
+            let mut surface = instance.create_surface_from_hwnd(/*hinstance as _,*/ hwnd as _);
             ( adapter, surface, instance)
         };
 

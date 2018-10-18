@@ -1628,7 +1628,7 @@ impl<B: hal::Backend> DescriptorPools<B> {
             }
         ];
 
-        let count = 800;
+        let count = 100;
         let cache_clip_range = vec![
             hal::pso::DescriptorRangeDesc {
                 ty: hal::pso::DescriptorType::SampledImage,

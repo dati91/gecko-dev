@@ -7,6 +7,10 @@
 with Files('**'):
     BUG_COMPONENT = ('Core', 'Graphics: WebRender')
 
+OS_LIBS += [
+    "d3d12",
+]
+
 EXPORTS.mozilla.webrender += [
     'RenderBufferTextureHost.h',
     'RenderCompositor.h',
