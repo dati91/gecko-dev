@@ -36,6 +36,7 @@ public:
 
 protected:
   RefPtr<gl::GLContext> mGL;
+  EGLConfig mEGLConfig;
 };
 
 } // namespace wr

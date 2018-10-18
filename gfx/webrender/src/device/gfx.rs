@@ -22,12 +22,11 @@ use std::mem;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::slice;
-use std::sync::Arc;
 #[cfg(feature = "debug_renderer")]
 use super::Capabilities;
 use super::{ShaderKind,VertexArrayKind, ExternalTexture, FrameId, TextureSlot, TextureFilter};
 use super::{VertexDescriptor, UploadMethod, Texel, ReadPixelsFormat, FileWatcherHandler};
-use super::{Texture, FBOId, RBOId, VertexUsageHint, ShaderError};
+use super::{Texture, FBOId, RBOId, VertexUsageHint, ShaderError, ProgramCache};
 use vertex_types::*;
 
 use hal;
@@ -50,7 +49,7 @@ pub const INVALID_TEXTURE_ID: TextureId = 0;
 pub const INVALID_PROGRAM_ID: ProgramId = ProgramId(0);
 pub const DEFAULT_READ_FBO: FBOId = FBOId(0);
 pub const DEFAULT_DRAW_FBO: FBOId = FBOId(1);
-pub const MAX_FRAME_COUNT: usize = 2;
+pub const MAX_FRAME_COUNT: usize = 1;
 
 const COLOR_RANGE: hal::image::SubresourceRange = hal::image::SubresourceRange {
     aspects: hal::format::Aspects::COLOR,
@@ -230,11 +229,9 @@ pub struct VAO;
 pub struct ProgramSources;
 
 #[cfg_attr(feature = "serialize_program", derive(Deserialize, Serialize))]
-pub struct ProgramBinary;
-
-pub trait ProgramCacheObserver {
-    fn notify_binary_added(&self, program_binary: &Arc<ProgramBinary>);
-    fn notify_program_binary_failed(&self, program_binary: &Arc<ProgramBinary>);
+pub struct ProgramBinary {
+    #[cfg(feature = "serialize_program")]
+    pub sources: ProgramSources,
 }
 
 impl ShaderKind {
@@ -244,14 +241,6 @@ impl ShaderKind {
             ShaderKind::DebugFont | ShaderKind::DebugColor => true,
             _ => false,
         }
-    }
-}
-
-pub struct ProgramCache;
-
-impl ProgramCache {
-    pub fn new() -> Rc<Self> {
-        Rc::new(ProgramCache {})
     }
 }
 
@@ -2071,10 +2060,18 @@ impl<B: hal::Backend> Device<B> {
         if extent.width == 0 { extent.width = 1; }
         if extent.height == 0 { extent.height = 1; }
 
-        let swap_config = SwapchainConfig::from_caps(&caps, surface_format)
+        /*let swap_config = SwapchainConfig::from_caps(&caps, surface_format)
             .with_image_usage(
                 hal::image::Usage::TRANSFER_SRC | hal::image::Usage::TRANSFER_DST | hal::image::Usage::COLOR_ATTACHMENT
-            );
+            );*/
+        let swap_config = SwapchainConfig::new(
+            extent.width,
+            extent.height,
+            surface_format,
+            caps.image_count.start
+        ).with_image_usage(
+            hal::image::Usage::TRANSFER_SRC | hal::image::Usage::TRANSFER_DST | hal::image::Usage::COLOR_ATTACHMENT
+        );
 
         let (swap_chain, backbuffer) = device.create_swapchain(surface, swap_config, None);
         println!("backbuffer={:?}", backbuffer);
@@ -2247,6 +2244,10 @@ impl<B: hal::Backend> Device<B> {
         self.max_texture_size
     }
 
+    pub(crate) fn frame_buffer_size(&self) -> DeviceUintSize {
+        DeviceUintSize::new(self.viewport.rect.w as _, self.viewport.rect.h as _)
+    }
+
     #[cfg(feature = "debug_renderer")]
     pub fn get_capabilities(&self) -> &Capabilities {
         &self.capabilities
@@ -2325,6 +2326,7 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub fn bind_textures(&mut self) {
+        println!("bind_textures");
         debug_assert!(self.inside_frame);
         assert_ne!(self.bound_program, INVALID_PROGRAM_ID);
         const SAMPLERS: [(usize, &'static str); 12] = [
@@ -2343,6 +2345,7 @@ impl<B: hal::Backend> Device<B> {
         ];
         let program = self.programs.get_mut(&self.bound_program).expect("Program not found.");
         let desc_set = self.descriptor_pools[self.next_id].get(&program.shader_kind);
+        println!("self.bound_textures={:?}", self.bound_textures);
         for &(index, sampler_name) in SAMPLERS.iter() {
             if self.bound_textures[index] != 0 {
                 let sampler = match self.bound_sampler[index] {
@@ -2350,6 +2353,8 @@ impl<B: hal::Backend> Device<B> {
                     TextureFilter::Nearest => &self.sampler_nearest,
                 };
                 program.bind_texture(&self.device, desc_set, &self.images[&self.bound_textures[index]].core, &sampler, sampler_name);
+            } else {
+                println!("######{:?} {:?} is not bound", SAMPLERS[index], index);
             }
         }
     }
@@ -2675,6 +2680,7 @@ impl<B: hal::Backend> Device<B> {
             let id = self.generate_texture_id();
             texture.id = id;
         } else {
+            println!("reuse texture {:?}", texture);
             self.free_image(texture);
         }
 
@@ -2796,6 +2802,7 @@ impl<B: hal::Backend> Device<B> {
                 self.generate_mipmaps(texture);
             }
         }
+        println!("init_texture {:?}", texture);
     }
 
     fn generate_mipmaps(&mut self, texture: &Texture) {
@@ -3068,6 +3075,7 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub fn free_texture_storage(&mut self, texture: &mut Texture) {
+        println!("free_texture_storage {:?}", texture);
         debug_assert!(self.inside_frame);
         if texture.width + texture.height == 0 {
             return;
@@ -3082,6 +3090,8 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub fn free_image(&mut self, texture: &mut Texture) {
+        println!("free_image {:?}", texture);
+        assert_eq!(texture.still_in_flight(self.frame_id), false);
         // Note: this is a very rare case, but if it becomes a problem
         // we need to handle this in renderer.rs
         if texture.still_in_flight(self.frame_id) && !self.upload_queue.is_empty() {
@@ -3116,6 +3126,7 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub fn delete_texture(&mut self, mut texture: Texture) {
+        println!("delete_texture {:?}", texture);
         self.free_texture_storage(&mut texture);
     }
 
@@ -3146,7 +3157,10 @@ impl<B: hal::Backend> Device<B> {
         debug_assert!(self.inside_frame);
 
         match self.upload_method {
-            UploadMethod::Immediate => unimplemented!(),
+            UploadMethod::Immediate => {
+                println!("upload_texture UploadMethod::Immediate is missing");
+                unimplemented!();
+            }
             UploadMethod::PixelBuffer(..) => {
                 TextureUploader {
                     device: self,
@@ -3157,25 +3171,17 @@ impl<B: hal::Backend> Device<B> {
 
     }
 
-    #[cfg(any(feature = "debug_renderer", feature = "capture"))]
-    pub fn read_pixels(&mut self, img_desc: &ImageDescriptor) -> Vec<u8> {
-        let mut pixels = vec![0; (img_desc.size.width * img_desc.size.height * 4) as usize];
-        self.read_pixels_into(
-            DeviceUintRect::new(DeviceUintPoint::zero(), DeviceUintSize::new(img_desc.size.width, img_desc.size.height)),
-            ReadPixelsFormat::Rgba8,
-            &mut pixels,
-        );
-        pixels
-    }
-
     /// Read rectangle of pixels into the specified output slice.
     pub fn read_pixels_into(
         &mut self,
-        rect: DeviceUintRect,
+        mut rect: DeviceUintRect,
         format: ReadPixelsFormat,
         output: &mut [u8],
     ) {
         println!("read_pixels_into");
+        let window_size = self.frame_buffer_size();
+        //println!("replace {} to {}", rect.origin.y, window_size.height - rect.size.height);
+        //rect.origin.y = window_size.height - rect.size.height;
         self.wait_for_resources();
 
         let bytes_per_pixel = match format {
@@ -3294,13 +3300,43 @@ impl<B: hal::Backend> Device<B> {
         data.truncate(output.len());
         if !capture_read && self.surface_format.base_format().0 == hal::format::SurfaceType::B8_G8_R8_A8 {
             let mut offset = 0;
+            let mut tmp = vec![0; size_in_bytes];
             for _ in 0..output.len()/4 {
-                output[offset + 0] = data[offset + 2];
-                output[offset + 1] = data[offset + 1];
-                output[offset + 2] = data[offset + 0];
-                output[offset + 3] = data[offset + 3];
+                tmp[offset + 0] = data[offset + 2];
+                tmp[offset + 1] = data[offset + 1];
+                tmp[offset + 2] = data[offset + 0];
+                tmp[offset + 3] = data[offset + 3];
                 offset += 4;
             }
+            /*let row_pitch : usize = (bytes_per_pixel * rect.size.width) as usize;
+            let mut offset : usize = 0;
+            let mut rev_offset : usize = row_pitch * (rect.size.height - 1) as usize;
+            let mut y_flipped_data = vec![0; size_in_bytes];
+            for _ in 0..rect.size.height {
+                y_flipped_data[offset .. (offset + row_pitch)] = tmp[rev_offset .. (rev_offset + row_pitch)];
+
+                offset += row_pitch;
+                rev_offset -= row_pitch;
+            }
+            output.swap_with_slice(&mut y_flipped_data);*/
+
+            let width = rect.size.width as usize;
+            let height = rect.size.height as usize;
+            let row_pitch : usize = bytes_per_pixel as usize * width;
+            let mut y_flipped_data = vec![0; size_in_bytes];
+
+            for y in 0..height as usize {
+                for x in 0..width as usize {
+                    let offset : usize = y * row_pitch + x * 4;
+                    let rev_offset : usize = (height - 1 - y) * row_pitch + x * 4;
+                    y_flipped_data[offset + 0] = tmp[rev_offset + 0];
+                    y_flipped_data[offset + 1] = tmp[rev_offset + 1];
+                    y_flipped_data[offset + 2] = tmp[rev_offset + 2];
+                    y_flipped_data[offset + 3] = tmp[rev_offset + 3];
+                }
+            }
+            output.swap_with_slice(&mut y_flipped_data);
+
         } else {
             output.swap_with_slice(&mut data);
         }
@@ -3308,6 +3344,17 @@ impl<B: hal::Backend> Device<B> {
         download_buffer.deinit(&self.device);
         command_pool.reset();
         self.device.destroy_command_pool(command_pool.into_raw());
+    }
+
+    #[cfg(any(feature = "debug_renderer", feature = "capture"))]
+    pub fn read_pixels(&mut self, img_desc: &ImageDescriptor) -> Vec<u8> {
+        let mut pixels = vec![0; (img_desc.size.width * img_desc.size.height * 4) as usize];
+        self.read_pixels_into(
+            DeviceUintRect::new(DeviceUintPoint::zero(), DeviceUintSize::new(img_desc.size.width, img_desc.size.height)),
+            ReadPixelsFormat::Rgba8,
+            &mut pixels,
+        );
+        pixels
     }
 
     /// Get texels of a texture into the specified output slice.
@@ -3657,6 +3704,7 @@ impl<B: hal::Backend> Device<B> {
 
     pub fn set_scissor_rect(&mut self, rect: DeviceIntRect) {
         self.scissor_rect = Some(rect);
+        println!("set_scissor_rect {:?}", self.scissor_rect);
     }
 
     pub fn enable_scissor(&self) {}
@@ -3742,7 +3790,7 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub fn submit_to_gpu(&mut self) -> bool {
-        println!("submit_to_gpu");
+        println!("submit_to_gpu start");
         {
             let mut cmd_buffer = self.command_pool[self.next_id].acquire_command_buffer(false);
             let image = &self.frame_images[self.current_frame_id];
@@ -3778,14 +3826,17 @@ impl<B: hal::Backend> Device<B> {
         self.next_id = (self.next_id + 1) % MAX_FRAME_COUNT;
         self.reset_state();
         if self.frame_fence[self.next_id].is_submitted {
+            println!("submit_to_gpu wait for frame_fence");
             self.device.wait_for_fence(&self.frame_fence[self.next_id].inner, !0);
             self.device.reset_fence(&self.frame_fence[self.next_id].inner);
             self.frame_fence[self.next_id].is_submitted = false;
+            println!("submit_to_gpu wait for frame_fence done");
         }
         self.command_pool[self.next_id].reset();
         self.staging_buffer_pool[self.next_id].reset();
         self.descriptor_pools[self.next_id].reset();
         self.reset_program_buffer_offsets();
+        println!("submit_to_gpu end");
         return !present_error;
     }
 

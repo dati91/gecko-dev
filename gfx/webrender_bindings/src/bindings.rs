@@ -492,14 +492,14 @@ extern "C" {
     fn is_in_render_thread() -> bool;
     fn is_in_main_thread() -> bool;
     fn is_glcontext_egl(glcontext_ptr: *mut c_void) -> bool;
-    fn is_glcontext_angle(glcontext_ptr: *mut c_void) -> bool;
+    //fn is_glcontext_angle(glcontext_ptr: *mut c_void) -> bool;
     // Enables binary recording that can be used with `wrench replay`
     // Outputs a wr-record-*.bin file for each window that is shown
     // Note: wrench will panic if external images are used, they can
     // be disabled in WebRenderBridgeParent::ProcessWebRenderCommands
     // by commenting out the path that adds an external image ID
     fn gfx_use_wrench() -> bool;
-    fn gfx_wr_resource_path_override() -> *const c_char;
+    //fn gfx_wr_resource_path_override() -> *const c_char;
     // TODO: make gfx_critical_error() work.
     // We still have problem to pass the error message from render/render_backend
     // thread to main thread now.
@@ -959,11 +959,11 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
         Arc::clone(&(*thread_pool).0)
     };
 
-    let upload_method = if unsafe { is_glcontext_angle(gl_context) } {
+    /*let upload_method = if unsafe { is_glcontext_angle(gl_context) } {
         UploadMethod::Immediate
     } else {
         UploadMethod::PixelBuffer(VertexUsageHint::Dynamic)
-    };
+    };*/
 
     let opts = RendererOptions {
         enable_aa: true,
@@ -974,7 +974,7 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
         workers: Some(workers.clone()),
         thread_listener: Some(Box::new(GeckoProfilerThreadListener::new())),
         size_of_op: Some(size_of_op),
-        resource_override_path: unsafe {
+        /*resource_override_path: unsafe {
             let override_charptr = gfx_wr_resource_path_override();
             if override_charptr.is_null() {
                 None
@@ -984,14 +984,14 @@ pub extern "C" fn wr_window_new(window_id: WrWindowId,
                     _ => None
                 }
             }
-        },
+        },*/
         renderer_id: Some(window_id.0),
-        upload_method,
+        upload_method: UploadMethod::PixelBuffer(VertexUsageHint::Dynamic),
         scene_builder_hooks: Some(Box::new(APZCallbacks::new(window_id))),
         sampler: Some(Box::new(SamplerCallback::new(window_id))),
         max_texture_size: Some(8192), // Moz2D doesn't like textures bigger than this
         clear_color: Some(ColorF::new(0.0, 0.0, 0.0, 0.0)),
-        precache_shaders: env_var_to_bool("MOZ_WR_PRECACHE_SHADERS"),
+        precache_shaders: false && env_var_to_bool("MOZ_WR_PRECACHE_SHADERS"),
         ..Default::default()
     };
 

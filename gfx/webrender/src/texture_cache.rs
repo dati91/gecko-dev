@@ -307,6 +307,7 @@ impl TextureCache {
     }
 
     pub fn clear(&mut self) {
+        println!("TextureCache::clear");
         let standalone_entry_handles = mem::replace(
             &mut self.standalone_entry_handles,
             Vec::new(),

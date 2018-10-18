@@ -74,7 +74,10 @@ public:
     }
 
     *mUseANGLE = compositor->UseANGLE();
+    gfxCriticalNote << "  mUseANGLE " << mUseANGLE;
+    *mUseANGLE = false;
     *mUseDComp = compositor->UseDComp();
+    gfxCriticalNote << "  mUseDComp " << mUseDComp;
 
     bool supportLowPriorityTransactions = true; // TODO only for main windows.
     wr::Renderer* wrRenderer = nullptr;

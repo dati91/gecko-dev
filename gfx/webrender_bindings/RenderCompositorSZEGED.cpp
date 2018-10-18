@@ -7,6 +7,7 @@
 #include "RenderCompositorSZEGED.h"
 
 #include "GLContext.h"
+#include "GLContextEGL.h"
 #include "GLContextProvider.h"
 #include "mozilla/gfx/Logging.h"
 #include "mozilla/webrender/RenderThread.h"
@@ -40,7 +41,7 @@ RenderCompositorSZEGED::~RenderCompositorSZEGED()
 bool
 RenderCompositorSZEGED::Initialize()
 {
-  const auto flags = gl::CreateContextFlags::NONE;
+  /*const auto flags = gl::CreateContextFlags::NONE;
 
   nsCString discardFailureId;
   mGL = gl::GLContextProviderWGL::CreateHeadless(flags, &discardFailureId);
@@ -53,7 +54,28 @@ RenderCompositorSZEGED::Initialize()
   if (!mGL->MakeCurrent()) {
     gfxCriticalNote << "Failed GL context creation for WebRender: " << gfx::hexa(mGL.get());
     return false;
+  }*/
+  nsCString discardFailureId;
+  const auto flags = gl::CreateContextFlags::PREFER_ES3;
+
+  // Create GLContext with dummy EGLSurface, the EGLSurface is not used.
+  // Instread we override it with EGLSurface of SwapChain's back buffer.
+  mGL = gl::GLContextProviderEGL::CreateHeadless(flags, &discardFailureId);
+  if (!mGL || !mGL->IsANGLE()) {
+    gfxCriticalNote << "Failed ANGLE GL context creation for WebRender: " << gfx::hexa(mGL.get());
+    return false;
   }
+
+  if (!mGL->MakeCurrent()) {
+    gfxCriticalNote << "Failed GL context creation for WebRender: " << gfx::hexa(mGL.get());
+    return false;
+  }
+
+  // Force enable alpha channel to make sure ANGLE use correct framebuffer formart
+  if (!gl::CreateConfig(&mEGLConfig, /* bpp */ 32, /* enableDepthBuffer */ true)) {
+    gfxCriticalNote << "Failed to create EGLConfig for WebRender";
+  }
+  MOZ_ASSERT(mEGLConfig);
 
   return true;
 }

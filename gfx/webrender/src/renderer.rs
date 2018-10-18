@@ -494,7 +494,7 @@ impl SourceTextureResolver {
         // flush all the WebRender caches in that case [1].
         //
         // [1] https://bugzilla.mozilla.org/show_bug.cgi?id=1494099
-        self.retain_targets(device, |texture| texture.used_recently(frame_id, 30));
+        self.retain_targets(device, |texture| texture.used_recently(frame_id, 30) || texture.still_in_flight(frame_id));
     }
 
     /// Drops all targets from the render target pool that do not satisfy the predicate.
@@ -1723,6 +1723,12 @@ impl Renderer
         // Pull any pending results and return the most recent.
         while let Ok(msg) = self.result_rx.try_recv() {
             match msg {
+                ResultMsg::PossibleResize(window_size) => {
+                    if window_size != self.device.frame_buffer_size() {
+                        println!("Resize from {:?} to {:?}", self.device.frame_buffer_size(), window_size);
+                        self.resize(Some((window_size.width, window_size.height)));
+                    }
+                }
                 ResultMsg::PublishPipelineInfo(mut pipeline_info) => {
                     for (pipeline_id, epoch) in pipeline_info.epochs {
                         self.pipeline_info.epochs.insert(pipeline_id, epoch);
@@ -2502,6 +2508,7 @@ impl Renderer
                                 )
                             }
                             TextureUpdateSource::External { id, channel_index } => {
+                                println!("TextureUpdateSource::External");
                                 let handler = self.external_image_handler
                                     .as_mut()
                                     .expect("Found external image, but no handler set!");
@@ -2524,7 +2531,8 @@ impl Renderer
                                         uploader.upload(rect, layer_index, stride, &dummy_data)
                                     }
                                     ExternalImageSource::NativeTexture(eid) => {
-                                        panic!("Unexpected external texture {:?} for the texture cache update of {:?}", eid, id);
+                                        println!("Unexpected external texture {:?} for the texture cache update of {:?}", eid, id);
+                                        0
                                     }
                                 };
                                 handler.unlock(id, channel_index);
@@ -2536,6 +2544,7 @@ impl Renderer
                     }
                     TextureUpdateOp::Free => {
                         let texture = &mut self.texture_resolver.cache_texture_map[update.id.0];
+                        println!("TextureUpdateOp::Free {:?}", texture);
                         self.device.free_texture_storage(texture);
                     }
                 }
@@ -2668,6 +2677,7 @@ impl Renderer
 
         if scissor_rect.is_some() {
             self.device.enable_scissor();
+            self.device.set_scissor_rect(scissor_rect.unwrap());
         }
     }
 
@@ -3495,6 +3505,7 @@ impl Renderer
                 #[cfg(not(feature = "gleam"))]
                 {
                     if texture.still_in_flight(frame_id) {
+                        println!("still_in_flight {:?}", texture);
                         return false;
                     }
                 }
@@ -3511,7 +3522,16 @@ impl Renderer
             counters.targets_changed.inc();
             index = self.texture_resolver.render_target_pool
                 .iter()
-                .position(|texture| texture.get_format() == list.format && !texture.used_in_frame(frame_id));
+                .position(|texture| {
+                    #[cfg(not(feature = "gleam"))]
+                    {
+                        if texture.still_in_flight(frame_id) {
+                            println!("still_in_flight {:?}", texture);
+                            return false;
+                        }
+                    }
+                    texture.get_format() == list.format && !texture.used_in_frame(frame_id)
+                });
         }
 
         let mut texture = match index {
